@@ -1,0 +1,31 @@
+{
+  "name": "maxnet-server",
+  "version": "0.1.0",
+  "description": "maxnet server",
+  "keywords": [
+    "maxnet",
+    "max",
+    "proxy"
+  ],
+  "homepage": "https://github.com/maxnetru/server#readme",
+  "bugs": {
+    "url": "https://github.com/maxnetru/server/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/maxnetru/server.git"
+  },
+  "license": "MIT",
+  "author": "Milk_Cool",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/server.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^24.5.2",
+    "tsx": "^4.20.5"
+  },
+  "dependencies": {
+    "readline-sync": "^1.4.10"
+  }
+}
