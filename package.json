@@ -26,6 +26,7 @@
     "tsx": "^4.20.5"
   },
   "dependencies": {
+    "base85": "^3.2.0",
     "readline-sync": "^1.4.10"
   }
 }
