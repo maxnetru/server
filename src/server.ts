@@ -8,6 +8,9 @@ import { whitelist } from "./whitelist";
 import http from "http";
 import net from "net";
 
+process.on("uncaughtException", err => console.error(err));
+process.on("unhandledRejection", err => console.error(err));
+
 const keys = await genKeypair();
 
 const secrets = {};
