@@ -63,6 +63,7 @@ export class Client {
 
     private seq: number = 0;
     private ws: WebSocket;
+    private interval: ReturnType<typeof setInterval> | null = null;
 
     private handler: ((packet: Packet) => void) | null = null;
 
@@ -76,6 +77,8 @@ export class Client {
             if(this.handler !== null) this.handler(incoming);
         });
         await new Promise(resolve => this.ws.addEventListener("open", resolve));
+        if(this.interval !== null) clearInterval(this.interval);
+        this.interval = setInterval(async () => this.ping(), 10000);
     }
 
     private constructPacket(opcode: number, payload: object | null, seq: number = -1, direction: 0 | 1 = 0): Packet {
@@ -192,5 +195,9 @@ export class Client {
             from: Date.now(),
             getMessages: true
         })).payload as Messages;
+    }
+
+    private async ping() {
+        await this.msg(1, { interactive: true }, false);
     }
 }
