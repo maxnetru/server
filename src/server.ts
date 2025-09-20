@@ -38,12 +38,11 @@ if(!authData.id || !authData.token) {
 let afterTokenData = await client.presentToken(authData.token);
 console.log(`Logged in as ${afterTokenData.profile.contact.names[0].name}`);
 
-// TODO: support multiple clients
-const requests: Record<number, http.ClientRequest> = {};
-const sockets: Record<number, net.Socket> = {};
+const requests: Record<string, http.ClientRequest> = {};
+const sockets: Record<string, net.Socket> = {};
 
-const incomingAccumulators: Record<number, IncomingAccumulator> = {};
-const outcomingAccumulators: Record<number, OutcomingAccumulator> = {};
+const incomingAccumulators: Record<string, IncomingAccumulator> = {};
+const outcomingAccumulators: Record<string, OutcomingAccumulator> = {};
 
 const getEnc = async (packet: string, secret: CryptoKey) => {
     const enc = await encrypt(Buffer.from(packet), secret);
@@ -92,7 +91,8 @@ client.addMessageHandler(async packet => {
         if(!packet) return;
 
         if(packet.type === "req") {
-            requests[packet.reqseq] = http.request({
+            const rkey = `${chatID}:${packet.reqseq}`;
+            requests[rkey] = http.request({
                 hostname: packet.hostname,
                 port: packet.port,
                 path: packet.path,
@@ -116,7 +116,7 @@ client.addMessageHandler(async packet => {
                             datseq: datseq++,
                             data: data.subarray(n, n + 1500)
                         };
-                        outcomingAccumulators[packet.reqseq].addPacket(outpacket.datseq, await getEnc(encodePacket(outpacket), secrets[chatID]));
+                        outcomingAccumulators[rkey].addPacket(outpacket.datseq, await getEnc(encodePacket(outpacket), secrets[chatID]));
                     }
                 });
                 res.on("end", async () => {
@@ -126,34 +126,36 @@ client.addMessageHandler(async packet => {
                         datseq: datseq++,
                         data: Buffer.alloc(0)
                     };
-                    outcomingAccumulators[packet.reqseq].addPacket(outpacket.datseq, await getEnc(encodePacket(outpacket), secrets[chatID]));
+                    outcomingAccumulators[rkey].addPacket(outpacket.datseq, await getEnc(encodePacket(outpacket), secrets[chatID]));
                 });
             });
 
-            incomingAccumulators[packet.reqseq] = new IncomingAccumulator(data => {
-                if(data.length === 0) requests[packet.reqseq].end();
-                else requests[packet.reqseq].write(data);
+            incomingAccumulators[rkey] = new IncomingAccumulator(data => {
+                if(data.length === 0) requests[rkey].end();
+                else requests[rkey].write(data);
             });
-            outcomingAccumulators[packet.reqseq] = new OutcomingAccumulator(client, chatID);
+            outcomingAccumulators[rkey] = new OutcomingAccumulator(client, chatID);
 
-            requests[packet.reqseq].write(packet.body);
+            requests[rkey].write(packet.body);
         } else if(packet.type === "reqData") {
+            const rkey = `${chatID}:${packet.reqseq}`;
             // requests[packet.reqseq].write(packet.data);
-            incomingAccumulators[packet.reqseq].addPacket(packet.datseq, packet.data);
+            incomingAccumulators[rkey].addPacket(packet.datseq, packet.data);
         } else if(packet.type === "encInit") {
             let [host, portStr] = (packet.host as string).split(":");
             if(!portStr) portStr = "443";
             const port = parseInt(portStr);
             let datseq = 0;
-            sockets[packet.reqseq] = net.connect(port, host);
+            const rkey = `${chatID}:${packet.reqseq}`;
+            sockets[rkey] = net.connect(port, host);
 
-            incomingAccumulators[packet.reqseq] = new IncomingAccumulator(data => {
-                if(data.length === 0) sockets[packet.reqseq].end();
-                else sockets[packet.reqseq].write(data);
+            incomingAccumulators[rkey] = new IncomingAccumulator(data => {
+                if(data.length === 0) sockets[rkey].end();
+                else sockets[rkey].write(data);
             });
-            outcomingAccumulators[packet.reqseq] = new OutcomingAccumulator(client, chatID);
+            outcomingAccumulators[rkey] = new OutcomingAccumulator(client, chatID);
 
-            sockets[packet.reqseq].on("data", async data => {
+            sockets[rkey].on("data", async data => {
                 for(let n = 0; n < data.length; n += 1500) {
                     const outpacket: OutcomingPacket = {
                         type: "encData",
@@ -161,21 +163,22 @@ client.addMessageHandler(async packet => {
                         datseq: datseq++,
                         data: data.subarray(n, n + 1500)
                     }
-                    outcomingAccumulators[packet.reqseq].addPacket(outpacket.datseq, await getEnc(encodePacket(outpacket), secrets[chatID]));
+                    outcomingAccumulators[rkey].addPacket(outpacket.datseq, await getEnc(encodePacket(outpacket), secrets[chatID]));
                 }
             });
-            sockets[packet.reqseq].on("end", async () => {
+            sockets[rkey].on("end", async () => {
                 const outpacket: OutcomingPacket = {
                     type: "encData",
                     reqseq: packet.reqseq,
                     datseq: datseq++,
                     data: Buffer.alloc(0)
                 };
-                outcomingAccumulators[packet.reqseq].addPacket(outpacket.datseq, await getEnc(encodePacket(outpacket), secrets[chatID]));
+                outcomingAccumulators[rkey].addPacket(outpacket.datseq, await getEnc(encodePacket(outpacket), secrets[chatID]));
             });
-            sockets[packet.reqseq].write(packet.data);
+            sockets[rkey].write(packet.data);
         } else if(packet.type === "encData") {
-            incomingAccumulators[packet.reqseq].addPacket(packet.datseq, packet.data);
+            const rkey = `${chatID}:${packet.reqseq}`;
+            incomingAccumulators[rkey].addPacket(packet.datseq, packet.data);
             // sockets[packet.reqseq].write(packet.data);
         }
     }
