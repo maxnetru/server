@@ -61,7 +61,7 @@ client.addMessageHandler(async packet => {
     }
     if(packet.opcode !== 128) return;
     const { message, chatId: chatID } = packet.payload as { message: { sender: number, text: string, id: string }, chatId: number };
-    console.log(`message from ${message.sender} #${message.id}: ${message.text}`);
+    // console.log(`message from ${message.sender} #${message.id}: ${message.text}`);
     if(message.sender === afterTokenData.profile.contact.id) return;
 
     if(!whitelist.includes(message.sender)) return;
@@ -108,7 +108,7 @@ client.addMessageHandler(async packet => {
                     body: Buffer.alloc(0)
                 }), secrets[chatID]));
                 let datseq = 0;
-                res.on("data", async (data: Buffer) => {
+                res.on("data", (data: Buffer) => {
                     for(let n = 0; n < data.length; n += 1500) {
                         const outpacket: OutcomingPacket = {
                             type: "resData",
@@ -116,7 +116,9 @@ client.addMessageHandler(async packet => {
                             datseq: datseq++,
                             data: data.subarray(n, n + 1500)
                         };
-                        outcomingAccumulators[rkey].addPacket(outpacket.datseq, await getEnc(encodePacket(outpacket), secrets[chatID]));
+                        // don't care about synchronization here, as we are using accumulators
+                        // in fact, this helps to not mess up the order of datseq's
+                        (async () => outcomingAccumulators[rkey].addPacket(outpacket.datseq, await getEnc(encodePacket(outpacket), secrets[chatID])))();
                     }
                 });
                 res.on("end", async () => {
@@ -130,7 +132,8 @@ client.addMessageHandler(async packet => {
                 });
             });
 
-            incomingAccumulators[rkey] = new IncomingAccumulator(data => {
+            incomingAccumulators[rkey] = new IncomingAccumulator((data, n) => {
+                console.log(`${packet.reqseq} ${packet.hostname} ${packet.port} - datseq ${n === 0xffffffff ? "end" : n} ${data.length}`);
                 if(data.length === 0) requests[rkey].end();
                 else requests[rkey].write(data);
             });
@@ -149,21 +152,22 @@ client.addMessageHandler(async packet => {
             const rkey = `${chatID}:${packet.reqseq}`;
             sockets[rkey] = net.connect(port, host);
 
-            incomingAccumulators[rkey] = new IncomingAccumulator(data => {
+            incomingAccumulators[rkey] = new IncomingAccumulator((data, n) => {
+                console.log(`${packet.reqseq} ${host} ${port} - datseq ${n === 0xffffffff ? "end" : n} ${data.length}`);
                 if(data.length === 0) sockets[rkey].end();
                 else sockets[rkey].write(data);
             });
             outcomingAccumulators[rkey] = new OutcomingAccumulator(client, chatID);
 
-            sockets[rkey].on("data", async data => {
+            sockets[rkey].on("data", data => {
                 for(let n = 0; n < data.length; n += 1500) {
                     const outpacket: OutcomingPacket = {
                         type: "encData",
                         reqseq: packet.reqseq,
                         datseq: datseq++,
                         data: data.subarray(n, n + 1500)
-                    }
-                    outcomingAccumulators[rkey].addPacket(outpacket.datseq, await getEnc(encodePacket(outpacket), secrets[chatID]));
+                    };
+                    (async () => outcomingAccumulators[rkey].addPacket(outpacket.datseq, await getEnc(encodePacket(outpacket), secrets[chatID])))();
                 }
             });
             sockets[rkey].on("end", async () => {
