@@ -123,7 +123,7 @@ client.addMessageHandler(async packet => {
                     const outpacket: OutcomingPacket = {
                         type: "resData",
                         reqseq: packet.reqseq,
-                        datseq: datseq++,
+                        datseq: 0xffffffff,
                         data: Buffer.alloc(0)
                     };
                     outcomingAccumulators[rkey].addPacket(outpacket.datseq, await getEnc(encodePacket(outpacket), secrets[chatID]));
@@ -170,7 +170,7 @@ client.addMessageHandler(async packet => {
                 const outpacket: OutcomingPacket = {
                     type: "encData",
                     reqseq: packet.reqseq,
-                    datseq: datseq++,
+                    datseq: 0xffffffff,
                     data: Buffer.alloc(0)
                 };
                 outcomingAccumulators[rkey].addPacket(outpacket.datseq, await getEnc(encodePacket(outpacket), secrets[chatID]));
